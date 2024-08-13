@@ -120,7 +120,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
                         file_exist = true;
                     } else {
                         let mut file = File::create(&file_path).await?;
-                        let n = file.write_all(&body).await?;
+                        file.write_all(&body).await?;
                     }
                 } else {
                     let mut s = String::new();
@@ -150,6 +150,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
 
         match user_data {
             Some(user_data) => {
+                println!("{}", user_data.ratio);
                 return Ok(HttpResponse::BadRequest().body("Upload successful"));
             }
             None => {
@@ -160,7 +161,8 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
 }
 
 async fn hi(app_data: web::Data<AppData>) -> impl Responder {
-    // let user_id = app_data.user_id.lock().unwrap();
+    let user_id = app_data.user_id.lock().unwrap();
+    println!("{}", user_id);
     HttpResponse::Ok().body("Hey there!")
 }
 
