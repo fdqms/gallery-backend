@@ -22,3 +22,6 @@ tract-onnx = "0.21.6"
 
 [profile.dev.package.surrealdb]
 opt-level = 3
+
+[profile.release]
+opt-level = 3

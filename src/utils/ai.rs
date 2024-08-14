@@ -1,17 +1,20 @@
+use std::io::Cursor;
+use actix_web::web::BytesMut;
 use tract_onnx::prelude::*;
-use image::GenericImageView;
+use image::{ImageReader};
 use tract_onnx::tract_core::ndarray::Axis;
 
-async fn check_safety() -> TractResult<bool> {
+pub async fn check_safety(model: &RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
+                          body: &BytesMut) -> TractResult<bool> {
 
-    let model = onnx()
-        .model_for_path("model.onnx")
-        .with_input_fact(0, InferenceFact::dt_shape(f32::datum_type(), tvec![1, 3, 224, 224]))?
-        .into_optimized()
-        .into_runnable();
+    let cursor = Cursor::new(body.to_vec());
 
-    let img = image::open("image2.jpg").unwrap().to_rgb8();
-    let resized = image::imageops::resize(&img, 224, 224, image::imageops::FilterType::Lanczos3);
+    let img = ImageReader::new(cursor).with_guessed_format()?.decode()?;
+
+    let rgb_img = img.to_rgb8();
+
+    // let img = image::open("image2.jpg").unwrap().to_rgb8();
+    let resized = image::imageops::resize(&rgb_img, 224, 224, image::imageops::FilterType::Lanczos3);
 
     let resized = resized
         .pixels()
@@ -25,10 +28,9 @@ async fn check_safety() -> TractResult<bool> {
     let result = model.run(tvec![TValue::from(input_tensor)])?;
 
     let output = result[0].to_array_view::<f32>()?;
+    let flat_output = output.as_slice().expect("Failed to convert to slice");
 
-    let best_index = output.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).map(|(idx, _)| idx).unwrap();
-
-    if best_index == 0 {
+    if flat_output[0] > flat_output[1] {
         return Ok(true)
     } else {
         return Ok(false)

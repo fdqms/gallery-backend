@@ -19,7 +19,7 @@ use tokio::io::AsyncWriteExt;
 use tract_onnx::{onnx, tract_core};
 use tract_onnx::prelude::{Datum, Framework, Graph, InferenceFact, InferenceModelExt, tvec, TypedFact, TypedOp};
 
-
+use gallery_backend::utils::ai::check_safety;
 use gallery_backend::utils::security::{sign, verify, check_characters_invalid, check_mail_invalid};
 use gallery_backend::utils::db;
 
@@ -95,7 +95,10 @@ async fn register(app_data: web::Data<AppData>, form: web::Form<RegisterForm>) -
 }
 
 #[post("/upload")]
-async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
+async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
+
+    let ai_model = &app_data.ai_model;
+
     let mut user_data: Option<UploadForm> = None;
     let mut file_exist = false;
 
@@ -109,6 +112,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
                     let (_, extension) = filename.rsplit_once(".").unwrap();
 
                     let mut body = web::BytesMut::new();
+
                     let mut hasher = Sha512::new();
 
                     while let Some(chunk) = field.next().await {
@@ -117,6 +121,13 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
                         hasher.update(data);
                     }
 
+                    let safety = check_safety(ai_model, &body).await.expect("ai err -> ");
+
+                    if !safety {
+                        return Ok(HttpResponse::Ok().body("NSFW content"))
+                    }
+
+
                     let hash = hex::encode(hasher.finalize());
 
                     let file_path = format!("images/{}.{}", hash, extension);
@@ -124,9 +135,8 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
                     if Path::new(&file_path).exists() {
                         file_exist = true;
                     } else {
-                        let mut file = File::create(&file_path).await?;
 
-                        // yapay zeka body
+                        let mut file = File::create(&file_path).await?;
 
                         file.write_all(&body).await?;
                     }
@@ -158,8 +168,7 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
 
         match user_data {
             Some(user_data) => {
-                println!("{}", user_data.ratio);
-                return Ok(HttpResponse::BadRequest().body("Upload successful"));
+                return Ok(HttpResponse::BadRequest().body(format!("Upload successful. ratio: {}", user_data.ratio)));
             }
             None => {
                 return Ok(HttpResponse::BadRequest().body("Data not found"));
