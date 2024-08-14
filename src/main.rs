@@ -16,11 +16,16 @@ use actix_multipart::Multipart;
 use sha2::{Sha512, Digest};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tract_onnx::{onnx, tract_core};
+use tract_onnx::prelude::{Datum, Framework, Graph, InferenceFact, InferenceModelExt, tvec, TypedFact, TypedOp};
+
+
 use gallery_backend::utils::security::{sign, verify, check_characters_invalid, check_mail_invalid};
 use gallery_backend::utils::db;
 
 
 struct AppData {
+    ai_model: tract_core::model::typed::RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
     user_id: Arc<Mutex<String>>,
     database: Surreal<Db>,
 }
@@ -120,6 +125,9 @@ async fn upload(mut payload: Multipart) -> Result<HttpResponse, Error> {
                         file_exist = true;
                     } else {
                         let mut file = File::create(&file_path).await?;
+
+                        // yapay zeka body
+
                         file.write_all(&body).await?;
                     }
                 } else {
@@ -197,11 +205,18 @@ async fn auth_middleware(
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
+    let model = onnx()
+        .model_for_path("model.onnx").unwrap()
+        .with_input_fact(0, InferenceFact::dt_shape(f32::datum_type(), tvec![1, 3, 224, 224])).unwrap()
+        .into_optimized().unwrap()
+        .into_runnable().unwrap();
+
     let db = Surreal::new::<Mem>(()).await.unwrap();
     db.use_ns("fdqms").await.expect("namespace err");
     db.use_db("gallery").await.expect("db err");
 
     let app_data = web::Data::new(AppData {
+        ai_model: model,
         user_id: Arc::new(Mutex::new("".to_string())),
         database: db,
     });
