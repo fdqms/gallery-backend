@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use actix_cors::Cors;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, cookie::{Cookie, time::Duration}, Error};
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -15,7 +16,7 @@ use futures::{StreamExt};
 use actix_multipart::Multipart;
 use sha2::{Sha512, Digest};
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tract_onnx::{onnx, tract_core};
 use tract_onnx::prelude::{Datum, Framework, Graph, InferenceFact, InferenceModelExt, tvec, TypedFact, TypedOp};
 
@@ -55,7 +56,7 @@ async fn logout() -> HttpResponse {
 }
 
 #[post("/login")]
-async fn login(app_data: web::Data<AppData>, form: web::Form<LoginForm>) -> HttpResponse {
+async fn login(app_data: web::Data<AppData>, form: web::Json<LoginForm>) -> HttpResponse {
     let characters_invalid = check_characters_invalid(vec![&form.username, &form.password]);
 
     if characters_invalid {
@@ -67,16 +68,17 @@ async fn login(app_data: web::Data<AppData>, form: web::Form<LoginForm>) -> Http
     let user_id = db::login(database, &form.username, &form.password).await.unwrap();
 
     return if user_id == "-1" {
-        HttpResponse::Ok().body("login failed")
+        HttpResponse::Unauthorized().body("login failed")
     } else {
         let token = sign("token", &user_id);
+
         let cookie = Cookie::build("token", token).domain(std::env::var("DOMAIN").expect("env err -> DOMAIN")).http_only(true).finish();
         HttpResponse::Ok().cookie(cookie).body("login successful")
     };
 }
 
 #[post("/register")]
-async fn register(app_data: web::Data<AppData>, form: web::Form<RegisterForm>) -> HttpResponse {
+async fn register(app_data: web::Data<AppData>, form: web::Json<RegisterForm>) -> HttpResponse {
     let characters_invalid = check_characters_invalid(vec![&form.username, &form.password]);
     let mail_invalid = check_mail_invalid(&form.email);
 
@@ -94,9 +96,21 @@ async fn register(app_data: web::Data<AppData>, form: web::Form<RegisterForm>) -
     return HttpResponse::Ok().cookie(cookie).body("register successful");
 }
 
+#[get("/post")]
+async fn image(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
+    let database = &app_data.database;
+
+
+    let mut image = File::open("image.jpeg").await.expect("");
+    let mut buffer = Vec::new();
+
+    image.read_to_end(&mut buffer).await.expect("");
+
+    return Ok(HttpResponse::Ok().content_type("image/jpeg").body(buffer));
+}
+
 #[post("/upload")]
 async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-
     let ai_model = &app_data.ai_model;
 
     let mut user_data: Option<UploadForm> = None;
@@ -124,7 +138,7 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
                     let safety = check_safety(ai_model, &body).await.expect("ai err -> ");
 
                     if !safety {
-                        return Ok(HttpResponse::Ok().body("NSFW content"))
+                        return Ok(HttpResponse::Ok().body("NSFW content"));
                     }
 
 
@@ -135,7 +149,6 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
                     if Path::new(&file_path).exists() {
                         file_exist = true;
                     } else {
-
                         let mut file = File::create(&file_path).await?;
 
                         file.write_all(&body).await?;
@@ -151,7 +164,7 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
                     user_data = match serde_json::from_str(&*s) {
                         Ok(user_data) => {
                             user_data
-                        },
+                        }
                         _ => return Ok(HttpResponse::BadRequest().body("Data not found"))
                     };
                 }
@@ -165,7 +178,6 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
     if file_exist {
         return Ok(HttpResponse::NotAcceptable().body("File already exist"));
     } else {
-
         match user_data {
             Some(user_data) => {
                 return Ok(HttpResponse::BadRequest().body(format!("Upload successful. ratio: {}", user_data.ratio)));
@@ -231,9 +243,12 @@ async fn main() -> std::io::Result<()> {
     });
 
     HttpServer::new(move || {
+        let cors = Cors::permissive();
+
         App::new()
             // .wrap(Logger::default())
             .wrap(from_fn(auth_middleware))
+            .wrap(cors)
             .app_data(app_data.clone())
             .service(logout)
             .service(login)
