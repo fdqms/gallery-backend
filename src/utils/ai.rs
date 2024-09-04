@@ -3,8 +3,9 @@ use actix_web::web::BytesMut;
 use tract_onnx::prelude::*;
 use image::{ImageReader};
 use tract_onnx::tract_core::ndarray::Axis;
+use crate::AiModel;
 
-pub async fn check_safety(model: &RunnableModel<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>,
+pub async fn check_safety(model: &AiModel,
                           body: &BytesMut) -> TractResult<bool> {
 
     let cursor = Cursor::new(body.to_vec());
@@ -31,8 +32,8 @@ pub async fn check_safety(model: &RunnableModel<TypedFact, Box<dyn TypedOp>, Gra
     let flat_output = output.as_slice().expect("Failed to convert to slice");
 
     if flat_output[0] > flat_output[1] {
-        return Ok(true)
+        Ok(true)
     } else {
-        return Ok(false)
+        Ok(false)
     }
 }
