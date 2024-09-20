@@ -2,8 +2,9 @@ use hmac::{Hmac, Mac};
 use jwt::{Error, SignWithKey, VerifyWithKey};
 use sha2::Sha384;
 use std::collections::BTreeMap;
-use actix_web::body::{BoxBody, MessageBody};
-use actix_web::dev::{Service, ServiceRequest, ServiceResponse};
+use actix_web::body::{BoxBody};
+use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::http::header;
 use actix_web::middleware::Next;
 use regex::Regex;
 
@@ -22,8 +23,31 @@ pub async fn check_request(req: ServiceRequest, next: Next<BoxBody>) -> Result<S
         Err(actix_web::error::ErrorBadRequest("Ambiguous request detected."))
     } else {
         let res = next.call(req).await?;
+
         Ok(res)
     }
+}
+
+pub async fn add_csp(req: ServiceRequest, next: Next<BoxBody>) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
+    let re = Regex::new(r"^/file/([^/]+)\.(jpe?g|png)$").unwrap();
+
+    let path = req.path().to_owned();
+    let mut res = next.call(req).await?;
+
+
+    if re.is_match(&path) {
+        res.headers_mut().insert(
+            header::CONTENT_SECURITY_POLICY,
+            header::HeaderValue::from_static("default-src 'self'; img-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline';"),
+        );
+    } else {
+        res.headers_mut().insert(
+            header::CONTENT_SECURITY_POLICY,
+            header::HeaderValue::from_static("default-src 'self' data:; img-src 'self' data: blob:; style-src 'self'; script-src 'self';"),
+        );
+    }
+
+    Ok(res)
 }
 
 pub fn compare_string(val1: &String, val2: &String) -> bool {
