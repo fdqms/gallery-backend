@@ -1,24 +1,8 @@
 use actix_web::web::Json;
 use surrealdb::engine::local::Db;
 use surrealdb::{Response, Surreal};
-use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize)]
-pub struct User {
-    id: String,
-    username: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    email: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    password: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct DbPost {
-    id: String,
-    image: String,
-    ratio: String,
-}
+use crate::model::post::Post;
+use crate::model::user::User;
 
 pub async fn user_search(database: &Surreal<Db>, user_id: &String, username: &String) -> surrealdb::Result<Vec<User>> {
     let mut result = database.query(format!(r#"
@@ -32,7 +16,7 @@ pub async fn user_search(database: &Surreal<Db>, user_id: &String, username: &St
 
 pub async fn follow(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<()> {
     database.query(format!(r#"
-    RELATE {}->friend->{} SET accepted=false;
+    RELATE {}->friend->user:{} SET accepted=false;
     "#, user_id, friend_id)).await?;
 
     Ok(())
@@ -40,23 +24,32 @@ pub async fn follow(database: &Surreal<Db>, user_id: &String, friend_id: &String
 
 pub async fn unfollow(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<()> {
     database.query(format!(r#"
-    DELETE friend WHERE in={} AND out={};
+    $user = {};
+    $friend = user:{};
+    DELETE friend WHERE in=$user AND out=$friend;
+    DELETE friend WHERE in=$friend AND out=$user;
     "#, user_id, friend_id)).await?;
 
     Ok(())
 }
 
 pub async fn follow_accept(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<()> {
+    // sorguda ekleren bir kez yapıp defalarca sorguladığımız için yükü buraya veriyoruz
     database.query(format!(r#"
-    UPDATE friend SET accepted=true WHERE out={} AND in={};
-     "#, user_id, friend_id)).await?;
+    $friend = user:{};
+    $user = {};
+    UPDATE friend SET accepted=true WHERE in=$friend AND out=$user;
+    RELATE $user -> friend -> $friend SET accepted=true;
+     "#, friend_id, user_id)).await?;
 
     Ok(())
 }
 
 pub async fn follow_reject(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<()> {
+    println!("{}", user_id);
+    println!("{}", friend_id);
     database.query(format!(r#"
-    DELETE friend WHERE out={} AND in={};
+    DELETE friend WHERE out={} AND in=user:{};
     "#, user_id, friend_id)).await?;
 
     Ok(())
@@ -64,7 +57,7 @@ pub async fn follow_reject(database: &Surreal<Db>, user_id: &String, friend_id: 
 
 pub async fn follow_pendings(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Vec<User>> {
     let mut result = database.query(format!(r#"
-    SELECT record::id(id) AS id, username FROM user WHERE ->(friend WHERE accepted=false AND out={});
+    (SELECT <-(friend WHERE accepted=false)<-user AS friends FROM {})[0].friends.map(|$f| {{username: $f.username, id: record::id($f.id)}});
     "#, user_id)).await?;
 
     let pendings: Vec<User> = result.take(0)?;
@@ -74,24 +67,25 @@ pub async fn follow_pendings(database: &Surreal<Db>, user_id: &String) -> surrea
 
 pub async fn follow_requests(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Vec<User>> {
     let mut result = database.query(format!(r#"
-        SELECT record::id(id) AS id, username FROM user WHERE <-(friend WHERE accepted=false AND in={});
+        (SELECT ->(friend WHERE accepted=false)->user AS friends FROM {})[0].friends.map(|$f| {{username: $f.username, id: record::id($f.id)}});
         "#, user_id)).await.expect("err");
     let requests: Vec<User> = result.take(0)?;
 
     Ok(requests)
 }
 
-pub async fn friend_post(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<Vec<DbPost>> {
-    let mut result = database.query(format!(r#"SELECT posts FROM {} WHERE ->friend.out={} OR <-friend.in={}"#, user_id, friend_id, friend_id)).await?;
-    let posts: Vec<DbPost> = result.take(0)?;
+pub async fn friend_post(database: &Surreal<Db>, user_id: &String, friend_id: &String) -> surrealdb::Result<Vec<Post>> {
+    let mut result = database.query(format!(r#"(SELECT ->(friend WHERE out=user:{})->user[0].posts as posts FROM {})[0].posts"#, friend_id, user_id)).await?;
+    let posts: Vec<Post> = result.take(0)?;
 
     Ok(posts)
 }
 
-pub async fn friends(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Vec<String>> {
-    let mut result = database.query(format!(r#"(SELECT array::add(->(friend WHERE accepted=true)->user, <-(friend WHERE accepted=true)<-user) AS friend FROM {})[0].friend"#, user_id)).await?;
-    let friends: Vec<String> = result.take(0)?;
-    
+pub async fn friends(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Vec<User>> {
+    let mut result = database.query(format!(r#"(SELECT ->(friend WHERE accepted=true)->user AS friends FROM {})[0].friends.map(|$f| {{username: $f.username, id: record::id($f.id)}});"#, user_id)).await?;
+
+    let friends: Vec<User> = result.take(0)?;
+
     Ok(friends)
 }
 
@@ -116,13 +110,13 @@ pub async fn post_delete(database: &Surreal<Db>, user_id: &String, post_id: &Str
     Ok(image)
 }
 
-pub async fn post_get_all(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Json<Vec<DbPost>>> {
+pub async fn post_get_all(database: &Surreal<Db>, user_id: &String) -> surrealdb::Result<Json<Vec<Post>>> {
     let mut result: Response = database.query(format!(r#"
     let $user = SELECT posts FROM {};
     $user[0].posts;
     "#, user_id)).await?;
 
-    let posts: Vec<DbPost> = result.take(1)?;
+    let posts: Vec<Post> = result.take(1)?;
 
     Ok(Json(posts))
 }
@@ -135,7 +129,7 @@ pub async fn post_add(database: &Surreal<Db>, ratio: String, image: String, user
         ratio: '{}'
     }};
     array::last($updated_data.posts[0]).id;
-    
+
     "#, user_id, image, ratio)).await?;
 
     let id: Option<String> = result.take(1)?;
