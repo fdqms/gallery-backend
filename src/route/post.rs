@@ -22,13 +22,12 @@ async fn get_file(req: HttpRequest, path: web::Path<String>) -> Result<HttpRespo
 
 #[post("/post/delete")]
 async fn post_delete(body: String, app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-    let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
     };
 
-    let image_name = db::surrealdb::post_delete(database, &user_id, &body).await.expect("err -> db::surrealdb::post_delete");
+    let image_name = db::surrealdb::post_delete(&user_id, &body).await.expect("err -> db::surrealdb::post_delete");
 
     match image_name {
         Some(image) => {
@@ -47,14 +46,12 @@ async fn post_delete(body: String, app_data: web::Data<AppData>) -> Result<HttpR
 
 #[get("/post")]
 async fn posts(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-    let database = &app_data.database;
-
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
     };
 
-    let result = db::surrealdb::post_get_all(database, &user_id).await.expect("err -> db::surrealdb::post_get_all");
+    let result = db::surrealdb::post_get_all(&user_id).await.expect("err -> db::surrealdb::post_get_all");
 
     Ok(HttpResponse::Ok().content_type("application/json").json(result))
 }
@@ -62,8 +59,6 @@ async fn posts(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
 #[post("/upload")]
 async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
     let ai_model = &app_data.ai_model;
-
-    let database = &app_data.database;
 
 
     let mut file_name = String::new();
@@ -151,7 +146,7 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
                 let uid = app_data.user_id.lock().unwrap();
                 uid.clone()
             };
-            let post_id = db::surrealdb::post_add(database, user_data.ratio, file_name, &user_id).await.expect("db::surrealdb::err -> post_add");
+            let post_id = db::surrealdb::post_add(user_data.ratio, file_name, &user_id).await.expect("db::surrealdb::err -> post_add");
 
             let mut file = File::create(&file_path).await?;
             file.write_all(&body).await?;

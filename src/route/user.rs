@@ -14,16 +14,14 @@ pub async fn logout() -> HttpResponse {
 }
 
 #[post("/login")]
-pub async fn login(app_data: web::Data<AppData>, form: web::Json<LoginForm>) -> HttpResponse {
+pub async fn login(form: web::Json<LoginForm>) -> HttpResponse {
     let characters_invalid = check_characters_invalid(vec![&form.username, &form.password]);
 
     if characters_invalid {
         return HttpResponse::Ok().body("invalid character");
     }
 
-    let database = &app_data.database;
-
-    let user_id = db::surrealdb::login(database, &form.username, &form.password).await.unwrap();
+    let user_id = db::surrealdb::login(&form.username, &form.password).await.unwrap();
 
     if user_id == "-1" {
         HttpResponse::Unauthorized().body("Login failed")
@@ -37,7 +35,7 @@ pub async fn login(app_data: web::Data<AppData>, form: web::Json<LoginForm>) -> 
 }
 
 #[post("/register")]
-pub async fn register(app_data: web::Data<AppData>, form: web::Json<RegisterForm>) -> HttpResponse {
+pub async fn register(form: web::Json<RegisterForm>) -> HttpResponse {
     let characters_invalid = check_characters_invalid(vec![&form.username, &form.password]);
     let mail_invalid = check_mail_invalid(&form.email);
 
@@ -45,9 +43,7 @@ pub async fn register(app_data: web::Data<AppData>, form: web::Json<RegisterForm
         return HttpResponse::Ok().body("Invalid character");
     }
 
-    let database = &app_data.database;
-
-    let user_id = db::surrealdb::register(database, &String::from(&form.username), &String::from(&form.email), &String::from(&form.password)).await.expect("err -> db::surrealdb::register");
+    let user_id = db::surrealdb::register(&String::from(&form.username), &String::from(&form.email), &String::from(&form.password)).await.expect("err -> db::surrealdb::register");
     let token = sign("token", &user_id);
 
     let logged_cookie = Cookie::build("logged", "1").domain(std::env::var("DOMAIN").expect("env err -> DOMAIN")).finish();
@@ -58,13 +54,12 @@ pub async fn register(app_data: web::Data<AppData>, form: web::Json<RegisterForm
 
 #[post("/users")]
 pub async fn users(app_data: web::Data<AppData>, body: String) -> Result<HttpResponse, Error> {
-    let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
     };
 
-    let users = db::surrealdb::user_search(database, &user_id, &body).await.expect("user err");
+    let users = db::surrealdb::user_search(&user_id, &body).await.expect("user err");
 
     Ok(HttpResponse::Ok()
         .content_type("application/json")

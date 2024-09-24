@@ -6,13 +6,12 @@ use actix_web::middleware::{from_fn, TrailingSlash};
 use actix_files::{Files};
 
 use dotenv::dotenv;
-use surrealdb::engine::local::{RocksDb}; // Mem
-use surrealdb::{Surreal};
-
+use surrealdb::engine::local::RocksDb;
 use tract_onnx::onnx;
 use tract_onnx::prelude::{Datum, Framework, InferenceFact, InferenceModelExt, tvec};
-use gallery_backend::{middleware, route, utils};
-use gallery_backend::model::app::AppData;
+
+use gallery_backend::{middleware, route, model::app::AppData};
+use gallery_backend::db::surrealdb::DB;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -22,13 +21,12 @@ async fn main() -> std::io::Result<()> {
 
     let db_init = !(db_path.exists() && db_path.is_dir());
 
-    let db = Surreal::new::<RocksDb>("database").await.unwrap();
-
-    db.use_ns("fdqms").await.expect("namespace err");
-    db.use_db("gallery").await.expect("db err");
+    DB.connect::<RocksDb>("database").await.unwrap();
+    DB.use_ns("fdqms").await.expect("namespace err");
+    DB.use_db("gallery").await.expect("db err");
 
     if db_init {
-        db.query(r#"
+        DB.query(r#"
             DEFINE TABLE user SCHEMALESS;
             DEFINE FIELD username ON TABLE user TYPE string;
             DEFINE FIELD email ON TABLE user TYPE string ASSERT string::is::email($value);
@@ -50,7 +48,7 @@ async fn main() -> std::io::Result<()> {
     let app_data = web::Data::new(AppData {
         ai_model: model,
         user_id: Arc::new(Mutex::new("".to_string())),
-        database: db,
+        // database: db,
     });
 
     HttpServer::new(move || {
@@ -62,7 +60,7 @@ async fn main() -> std::io::Result<()> {
                 .add(("Content-Security-Policy", "frame-ancestors 'none';"))
             )
             // .wrap(from_fn(add_csp))
-            .wrap(from_fn(utils::security::check_request))
+            .wrap(from_fn(middleware::security::check_request))
             .wrap(from_fn(middleware::auth::auth_middleware))
             .wrap(actix_web::middleware::NormalizePath::new(TrailingSlash::Trim))
             .wrap(cors)

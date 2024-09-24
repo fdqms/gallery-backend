@@ -18,15 +18,6 @@ pub fn check_mail_invalid(input: &String) -> bool {
     true
 }
 
-pub async fn check_request(req: ServiceRequest, next: Next<BoxBody>) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
-    if req.headers().contains_key("Transfer-Encoding") && req.headers().contains_key("Content-Length") {
-        Err(actix_web::error::ErrorBadRequest("Ambiguous request detected."))
-    } else {
-        let res = next.call(req).await?;
-
-        Ok(res)
-    }
-}
 
 pub async fn add_csp(req: ServiceRequest, next: Next<BoxBody>) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
     let re = Regex::new(r"^/file/([^/]+)\.(jpe?g|png)$").unwrap();
