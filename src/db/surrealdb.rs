@@ -124,18 +124,19 @@ pub async fn post_get_all(user_id: &String) -> surrealdb::Result<Json<Vec<Post>>
     Ok(Json(posts))
 }
 
-pub async fn post_add(ratio: String, image: String, user_id: &String) -> surrealdb::Result<String> {
+pub async fn post_add(ratio: String, image: &String, user_id: &String) -> surrealdb::Result<String> {
     let mut result: Response = DB.query(format!(r#"
+    let $id = type::string(rand::uuid::v7());
     let $updated_data = UPDATE {} SET posts +=  {{
-        id: type::string(rand::uuid::v7()),
+        id: $id,
         image: '{}',
         ratio: '{}'
     }};
-    array::last($updated_data.posts[0]).id;
+    $id;
 
     "#, user_id, image, ratio)).await?;
 
-    let id: Option<String> = result.take(1)?;
+    let id: Option<String> = result.take(2)?;
 
     Ok(id.unwrap())
 }

@@ -5,5 +5,4 @@ use crate::AiModel;
 pub struct AppData {
     pub ai_model: AiModel,
     pub user_id: Arc<Mutex<String>>,
-    // pub database: Surreal<Db>,
 }

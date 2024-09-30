@@ -48,7 +48,6 @@ async fn main() -> std::io::Result<()> {
     let app_data = web::Data::new(AppData {
         ai_model: model,
         user_id: Arc::new(Mutex::new("".to_string())),
-        // database: db,
     });
 
     HttpServer::new(move || {

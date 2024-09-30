@@ -3,6 +3,7 @@ use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
 use futures::StreamExt;
+use serde_json::json;
 use sha2::{Digest, Sha512};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -146,12 +147,15 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
                 let uid = app_data.user_id.lock().unwrap();
                 uid.clone()
             };
-            let post_id = db::surrealdb::post_add(user_data.ratio, file_name, &user_id).await.expect("db::surrealdb::err -> post_add");
+            let post_id = db::surrealdb::post_add(user_data.ratio, &file_name, &user_id).await.expect("db::surrealdb::err -> post_add");
 
             let mut file = File::create(&file_path).await?;
             file.write_all(&body).await?;
 
-            Ok(HttpResponse::Ok().body(post_id))
+            Ok(HttpResponse::Ok().json(json!({
+                "id": &*post_id,
+                "image": &*file_name
+            })))
         }
         None => {
             Ok(HttpResponse::BadRequest().body("Data not found"))

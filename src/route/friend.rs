@@ -4,7 +4,6 @@ use crate::model::app::AppData;
 
 #[post("/follow/{friend_id}")]
 pub async fn follow(app_data: web::Data<AppData>, f: web::Path<String>) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let friend_id = f.into_inner();
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
@@ -18,7 +17,6 @@ pub async fn follow(app_data: web::Data<AppData>, f: web::Path<String>) -> Resul
 
 #[post("/unfollow")]
 pub async fn unfollow(app_data: web::Data<AppData>, body: String) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -31,7 +29,6 @@ pub async fn unfollow(app_data: web::Data<AppData>, body: String) -> Result<Http
 
 #[post("/follow/accept")]
 pub async fn follow_accept(app_data: web::Data<AppData>, body: String) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -44,7 +41,6 @@ pub async fn follow_accept(app_data: web::Data<AppData>, body: String) -> Result
 
 #[post("/follow/reject")]
 pub async fn follow_reject(app_data: web::Data<AppData>, body: String) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -57,7 +53,6 @@ pub async fn follow_reject(app_data: web::Data<AppData>, body: String) -> Result
 
 #[get("/follow/pendings")]
 pub async fn follow_pendings(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -71,7 +66,6 @@ pub async fn follow_pendings(app_data: web::Data<AppData>) -> Result<HttpRespons
 
 #[get("/follow/requests")]
 pub async fn follow_requests(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -86,7 +80,6 @@ pub async fn follow_requests(app_data: web::Data<AppData>) -> Result<HttpRespons
 
 #[get("/friends")]
 pub async fn friends(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
@@ -102,7 +95,6 @@ pub async fn friends(app_data: web::Data<AppData>) -> Result<HttpResponse, Error
 #[get("/friend/{friend_id}/post")]
 pub async fn friend_posts(app_data: web::Data<AppData>, path: web::Path<String>) -> Result<HttpResponse, Error> {
     let friend_id = path.into_inner();
-    // let database = &app_data.database;
     let user_id = {
         let uid = app_data.user_id.lock().unwrap();
         uid.clone()
