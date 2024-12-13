@@ -60,7 +60,16 @@ async fn posts(app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
 #[post("/upload")]
 async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<HttpResponse, Error> {
     let ai_model = &app_data.ai_model;
+    let user_id = {
+        let uid = app_data.user_id.lock().unwrap();
+        uid.clone()
+    };
 
+    let last_date = db::surrealdb::check_premium(&user_id).await.expect("err -> db::user::check_premium");
+
+    if last_date == 0 {
+        return Err(actix_web::error::ErrorBadRequest("premium not found"))
+    }
 
     let mut file_name = String::new();
     let mut file_path = String::new();
@@ -141,12 +150,8 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
         }
     };
 
-    return match user_data {
+    match user_data {
         Some(user_data) => {
-            let user_id = {
-                let uid = app_data.user_id.lock().unwrap();
-                uid.clone()
-            };
             let post_id = db::surrealdb::post_add(user_data.ratio, &file_name, &user_id).await.expect("db::surrealdb::err -> post_add");
 
             let mut file = File::create(&file_path).await?;
@@ -160,5 +165,5 @@ async fn upload(mut payload: Multipart, app_data: web::Data<AppData>) -> Result<
         None => {
             Ok(HttpResponse::BadRequest().body("Data not found"))
         }
-    };
+    }
 }

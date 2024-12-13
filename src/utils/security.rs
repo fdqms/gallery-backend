@@ -4,11 +4,11 @@ use sha2::Sha384;
 use std::collections::BTreeMap;
 use actix_web::body::{BoxBody};
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::http::header;
+use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::middleware::Next;
 use regex::Regex;
 
-pub fn check_mail_invalid(input: &String) -> bool {
+pub fn check_mail_invalid(input: &str) -> bool {
     let re = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
 
     if re.is_match(input) {
@@ -19,34 +19,114 @@ pub fn check_mail_invalid(input: &String) -> bool {
 }
 
 
-pub async fn add_csp(req: ServiceRequest, next: Next<BoxBody>) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
-    let re = Regex::new(r"^/file/([^/]+)\.(jpe?g|png)$").unwrap();
+// pub async fn add_csp(req: ServiceRequest, next: Next<BoxBody>) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
+//     let re = Regex::new(r"^/file/([^/]+)\.(jpe?g|png)$").unwrap();
+//
+//     let path = req.path().to_owned();
+//     let mut res = next.call(req).await?;
+//
+//
+//     if re.is_match(&path) {
+//         res.headers_mut().insert(
+//             header::CONTENT_SECURITY_POLICY,
+//             header::HeaderValue::from_static("default-src 'self'; img-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline';"),
+//         );
+//     } else {
+//         res.headers_mut().insert(
+//             header::CONTENT_SECURITY_POLICY,
+//             header::HeaderValue::from_static("default-src 'self' data:; img-src 'self' data: blob:; style-src 'self'; script-src 'self';"),
+//         );
+//     }
+//
+//     Ok(res)
+// }
 
-    let path = req.path().to_owned();
-    let mut res = next.call(req).await?;
+pub async fn add_csp(
+    req: ServiceRequest, next: Next<BoxBody>
+) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
+    let mut response = next.call(req).await?;
 
+    let csp_policy = [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "connect-src 'self' ws: wss: https:",
+        "font-src 'self' data: https:",
+        "frame-src 'none'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "media-src 'self' blob:; ",
+        "worker-src 'self' blob:; ",
+        "manifest-src 'self'"
+    ];
+    
+    response.headers_mut().insert(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_str(&csp_policy.join("; "))?
+    );
+    
+    response.headers_mut().insert(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff")
+    );
 
-    if re.is_match(&path) {
-        res.headers_mut().insert(
-            header::CONTENT_SECURITY_POLICY,
-            header::HeaderValue::from_static("default-src 'self'; img-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline';"),
-        );
-    } else {
-        res.headers_mut().insert(
-            header::CONTENT_SECURITY_POLICY,
-            header::HeaderValue::from_static("default-src 'self' data:; img-src 'self' data: blob:; style-src 'self'; script-src 'self';"),
-        );
-    }
+    response.headers_mut().insert(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY")
+    );
 
-    Ok(res)
+    response.headers_mut().insert(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin")
+    );
+
+    Ok(response)
+}
+
+pub async fn add_cors(
+    req: ServiceRequest, next: Next<BoxBody>
+) -> Result<ServiceResponse<BoxBody>, actix_web::Error> {
+    let mut response = next.call(req).await?;
+
+    response.headers_mut().insert(
+        HeaderName::from_static("access-control-allow-origin"),
+        HeaderValue::from_static("https://xn--hatradefteri-34b.com")
+    );
+
+    // // CORS için ek başlıklar ekleyebilirsiniz:
+    // response.headers_mut().insert(
+    //     HeaderName::from_static("access-control-allow-methods"),
+    //     HeaderValue::from_static("GET, POST, PUT, DELETE, OPTIONS")
+    // );
+    //
+    // response.headers_mut().insert(
+    //     HeaderName::from_static("access-control-allow-headers"),
+    //     HeaderValue::from_static("Content-Type, Authorization")
+    // );
+
+    Ok(response)
 }
 
 pub fn compare_string(val1: &String, val2: &String) -> bool {
     val1 == val2
 }
 
-pub fn check_characters_invalid(inputs: Vec<&String>) -> bool {
-    let re = Regex::new(r"^[a-zA-Z0-9]*$").unwrap();
+pub fn check_injection(inputs: Vec<&String>) -> bool {
+    let re = Regex::new(r"(?i)(--|#|/\*|\*/|\b(select|insert|update|delete|drop|union|alter|exec|create|table)\b)").unwrap();
+
+    for input in inputs {
+        if re.is_match(input) {
+            return true;
+        }
+    }
+
+    false
+}
+
+pub fn check_xss(inputs: Vec<&String>) -> bool {
+    let re = Regex::new(r"(<script.*?>.*?</script>|<.*?>)").unwrap();
 
     for input in inputs {
         if !re.is_match(input) {

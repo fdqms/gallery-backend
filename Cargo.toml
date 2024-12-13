@@ -4,19 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.88"
-actix-cors = "0.7.0"
+actix-http = "3.9.0"
 actix-files = "0.6.6"
 actix-multipart = "0.7.2"
-actix-web = "4.9.0"
+actix-web = {version = "4.9.0", features = ["openssl"]}
 bytes = "1.7.1"
 dotenv = "0.15.0"
 futures = "0.3.30"
 hex = "0.4.3"
 hmac = "0.12.1"
-image = "0.25.2"
 jwt = "0.16.0"
-hashlink = "0.9.1"
 regex = "1.10.6"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.122"
@@ -24,6 +21,9 @@ sha2 = "0.10.8"
 surrealdb = { version = "2.0.1", features = ["kv-mem", "kv-rocksdb"] }
 tokio = { version = "1.40.0", features = ["full"] }
 tract-onnx = "0.21.6"
+openssl = { version = "0.10.68", features = ["vendored"] }
+web3 = "0.19.0"
+chrono = "0.4.38"
 
 [profile.dev.package.surrealdb]
 opt-level = 3

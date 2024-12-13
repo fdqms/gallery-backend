@@ -9,3 +9,4 @@ pub mod model;
 pub mod middleware;
 pub mod ai;
 pub mod db;
+pub mod service;

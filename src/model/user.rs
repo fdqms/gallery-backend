@@ -22,3 +22,9 @@ pub struct RegisterForm {
     pub email: String,
     pub password: String,
 }
+
+#[derive(Deserialize)]
+pub struct ChangePasswordForm {
+    pub old: String,
+    pub new: String,
+}
