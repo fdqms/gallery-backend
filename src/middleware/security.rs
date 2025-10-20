@@ -65,7 +65,7 @@ fn sanitize_input(input: &str) -> String {
         r"javascript:",
         r"\.\.",
         r"(/\.\.|\\\.\.)",
-        r"(?i)(\b(SELECT|DELETE|UPDATE|INSERT|DROP|UNION|ALTER)\b)",
+        r"(?i)(?:^|\s)(SELECT|DELETE|UPDATE|INSERT|DROP|UNION|ALTER)",
         r"(\d+\s*[=<>]\s*\d+)",
         r";\s*[a-zA-Z]",
         r#""\s*OR\s*"|'\\s*OR\\s*'"#,
